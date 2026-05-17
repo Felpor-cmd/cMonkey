@@ -18,6 +18,13 @@ static const char *ANSI_GREEN = "\033[32m";
 static const char *CLEAR_SCREEN = "\033[2J\033[H";
 static const char *CURSOR_HIDE = "\033[?25l";
 static const char *CURSOR_SHOW = "\033[?25h";
+static const int TARGET_ROW_WIDTH = 66;
+static const int TARGET_VISIBLE_ROWS = 3;
+
+typedef struct {
+    int start;
+    int end;
+} RowSpan;
 
 static const char *color(bool use_color, const char *code)
 {
@@ -34,6 +41,76 @@ static void render_logo(bool use_color)
     printf(" \\___|_| |_| |_|\\___/|_| |_|_|\\_\\___|\\__, |\n");
     printf("                                       |__/\n");
     printf("%s\n", color(use_color, ANSI_RESET));
+}
+
+static int build_row_layout(const TestSession *session, RowSpan rows[MAX_TEST_CHARS])
+{
+    if (session->target_len <= 0) {
+        rows[0].start = 0;
+        rows[0].end = 0;
+        return 1;
+    }
+
+    int row_count = 0;
+    int start = 0;
+
+    while (start < session->target_len && row_count < MAX_TEST_CHARS) {
+        int end = start;
+        int width = 0;
+        int last_space = -1;
+
+        while (end < session->target_len) {
+            const char ch = session->target[end];
+            if (ch == ' ') {
+                last_space = end;
+            }
+
+            end++;
+            width++;
+
+            if (width >= TARGET_ROW_WIDTH) {
+                if (end < session->target_len && last_space >= start) {
+                    end = last_space + 1;
+                }
+                break;
+            }
+        }
+
+        if (end <= start) {
+            end = start + 1;
+        }
+
+        rows[row_count].start = start;
+        rows[row_count].end = end;
+        row_count++;
+        start = end;
+    }
+
+    if (row_count <= 0) {
+        rows[0].start = 0;
+        rows[0].end = session->target_len;
+        return 1;
+    }
+
+    return row_count;
+}
+
+static int find_cursor_row(const RowSpan *rows, int row_count, int cursor, int target_len)
+{
+    if (row_count <= 0) {
+        return 0;
+    }
+    if (cursor >= target_len) {
+        return row_count - 1;
+    }
+
+    for (int i = 0; i < row_count; i++) {
+        if (cursor < rows[i].end) {
+            return i;
+        }
+    }
+
+    return row_count - 1;
 }
 
 static void draw_progress_bar(double progress, int width, bool use_color)
@@ -120,35 +197,51 @@ void terminal_render_test(const TestSession *session, const Metrics *metrics, lo
     fputs(CURSOR_HIDE, stdout);
 
     render_logo(use_color);
-    printf(" Target\n ");
+    RowSpan rows[MAX_TEST_CHARS];
+    const int row_count = build_row_layout(session, rows);
+    const int cursor_row = find_cursor_row(rows, row_count, session->cursor, session->target_len);
 
-    int col = 1;
-    for (int i = 0; i < session->target_len; i++) {
-        const char t = session->target[i];
-
-        if (i < session->cursor) {
-            if (session->typed[i] == t) {
-                fputs(color(use_color, ANSI_WHITE), stdout);
-            } else {
-                fputs(color(use_color, ANSI_RED), stdout);
-            }
-            putchar(t);
-            fputs(color(use_color, ANSI_RESET), stdout);
-        } else {
-            fputs(color(use_color, ANSI_DIM), stdout);
-            putchar(t);
-            fputs(color(use_color, ANSI_RESET), stdout);
-        }
-
-        col++;
-        if (col > 74 && t == ' ') {
-            printf("\n ");
-            col = 1;
+    int first_visible_row = 0;
+    if (cursor_row >= 2) {
+        first_visible_row = cursor_row - 1;
+    }
+    int last_visible_row = first_visible_row + TARGET_VISIBLE_ROWS;
+    if (last_visible_row > row_count) {
+        last_visible_row = row_count;
+    }
+    if ((last_visible_row - first_visible_row) < TARGET_VISIBLE_ROWS && first_visible_row > 0) {
+        first_visible_row = last_visible_row - TARGET_VISIBLE_ROWS;
+        if (first_visible_row < 0) {
+            first_visible_row = 0;
         }
     }
 
-    printf("\n\n > ");
-    for (int i = 0; i < session->cursor; i++) {
+    printf(" Target\n");
+    for (int row = first_visible_row; row < last_visible_row; row++) {
+        printf(" ");
+        for (int i = rows[row].start; i < rows[row].end; i++) {
+            const char t = session->target[i];
+
+            if (i < session->cursor) {
+                if (session->typed[i] == t) {
+                    fputs(color(use_color, ANSI_WHITE), stdout);
+                } else {
+                    fputs(color(use_color, ANSI_RED), stdout);
+                }
+                putchar(t);
+                fputs(color(use_color, ANSI_RESET), stdout);
+            } else {
+                fputs(color(use_color, ANSI_DIM), stdout);
+                putchar(t);
+                fputs(color(use_color, ANSI_RESET), stdout);
+            }
+        }
+        printf("\n");
+    }
+
+    printf("\n > ");
+    const int input_start = rows[cursor_row].start;
+    for (int i = input_start; i < session->cursor && i < session->target_len; i++) {
         if (session->typed[i] == session->target[i]) {
             fputs(color(use_color, ANSI_WHITE), stdout);
         } else {
