@@ -1,10 +1,10 @@
-                            _
+```                         _
   ___ _ __ ___   ___  _ __ | | _____ _   _
  / __| '_ ` _ \ / _ \| '_ \| |/ / _ \ | | |
 | (__| | | | | | (_) | | | |   <  __/ |_| |
  \___|_| |_| |_|\___/|_| |_|_|\_\___|\__, |
                                        |__/
-
+```
 
 > A terminal typing speed trainer written in C.  
 > No internet. No browser. No dependencies. Pure speed.
