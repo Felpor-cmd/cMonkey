@@ -88,10 +88,6 @@ void engine_handle_backspace(TestSession *session)
         if (session->correct_chars > 0) {
             session->correct_chars--;
         }
-    } else {
-        if (session->errors > 0) {
-            session->errors--;
-        }
     }
 
     if ((expected == ' ' || (idx + 1) == session->target_len) && session->word_time_count > 0) {

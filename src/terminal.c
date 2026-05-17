@@ -276,7 +276,7 @@ void terminal_render_test(const TestSession *session, const Metrics *metrics, lo
     fflush(stdout);
 }
 
-void terminal_render_results(const TestSession *session, const Metrics *metrics, bool use_color)
+void terminal_render_results(const TestSession *session, const Metrics *metrics, const char *difficulty_name, bool use_color)
 {
     (void)session;
     terminal_clear_screen();
@@ -288,6 +288,7 @@ void terminal_render_results(const TestSession *session, const Metrics *metrics,
     printf(" Accuracy        %.1f %%\n", metrics->accuracy);
     printf(" Correct chars   %d\n", metrics->correct_chars);
     printf(" Errors          %d\n", metrics->error_count);
+    printf(" Difficulty      %s\n", difficulty_name != NULL ? difficulty_name : "unknown");
     printf(" Consistency     %.1f %%\n", metrics->consistency);
     printf(" Time            %.1f s\n", metrics->elapsed_s);
     printf("\n [Enter] new game   [r] retry same   [m] main menu   [q] quit\n");

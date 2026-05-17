@@ -45,7 +45,7 @@ void engine_start(TestSession *session, long long now_us);
 /** Handle one typed character and apply correctness/error accounting. */
 void engine_handle_char(TestSession *session, char c, long long now_us);
 
-/** Handle backspace and reverse correctness/error accounting for that position. */
+/** Handle backspace and reverse per-position state where applicable. */
 void engine_handle_backspace(TestSession *session);
 
 /** Finish the session and store end time. */

@@ -438,7 +438,7 @@ int main(int argc, char **argv)
 
         Metrics final_metrics;
         metrics_compute(&session, &final_metrics);
-        terminal_render_results(&session, &final_metrics, use_color);
+        terminal_render_results(&session, &final_metrics, words_list_name(current_list_kind), use_color);
 
         const ResultAction action = wait_for_results_action();
         if (action == RESULT_QUIT) {

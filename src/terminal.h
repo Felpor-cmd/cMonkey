@@ -22,7 +22,7 @@ void terminal_clear_screen(void);
 void terminal_render_test(const TestSession *session, const Metrics *metrics, long long now_us, bool use_color);
 
 /** Render the post-run results screen. */
-void terminal_render_results(const TestSession *session, const Metrics *metrics, bool use_color);
+void terminal_render_results(const TestSession *session, const Metrics *metrics, const char *difficulty_name, bool use_color);
 
 /** Render the startup main menu. */
 void terminal_render_main_menu(bool use_color);
