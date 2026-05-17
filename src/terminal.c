@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -303,5 +304,60 @@ void terminal_render_main_menu(bool use_color)
     printf(" [1] Regular run\n");
     printf(" [q] Quit\n");
     printf("\n Select an option and press Enter.\n");
+    fflush(stdout);
+}
+
+static void render_setup_option(const char *label, bool selected, bool focused, bool use_color, int width)
+{
+    if (selected && focused) {
+        printf("%s> %-*s%s", color(use_color, ANSI_GREEN), width - 2, label, color(use_color, ANSI_RESET));
+        return;
+    }
+    if (selected) {
+        printf("%s* %-*s%s", color(use_color, ANSI_WHITE), width - 2, label, color(use_color, ANSI_RESET));
+        return;
+    }
+    printf("%s  %-*s%s", color(use_color, ANSI_DIM), width - 2, label, color(use_color, ANSI_RESET));
+}
+
+void terminal_render_run_setup(bool use_color, int selected_time_seconds, const char *selected_list_name, bool focus_time)
+{
+    static const int time_options[] = { 15, 30, 60, 120 };
+    static const char *list_options[] = { "easy", "common", "full" };
+    const int max_rows = 4;
+
+    terminal_clear_screen();
+    fputs(CURSOR_HIDE, stdout);
+    render_logo(use_color);
+
+    printf(" %sRegular Run Setup%s\n\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+    printf(" %sTime%s                %sDifficulty%s\n",
+           color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET),
+           color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+
+    for (int row = 0; row < max_rows; row++) {
+        char time_label[16] = "";
+        const char *list_label = "";
+        bool time_selected = false;
+        bool list_selected = false;
+
+        if (row < (int)(sizeof(time_options) / sizeof(time_options[0]))) {
+            snprintf(time_label, sizeof(time_label), "%ds", time_options[row]);
+            time_selected = (time_options[row] == selected_time_seconds);
+        }
+        if (row < (int)(sizeof(list_options) / sizeof(list_options[0]))) {
+            list_label = list_options[row];
+            list_selected = (selected_list_name != NULL && strcmp(list_label, selected_list_name) == 0);
+        }
+
+        printf(" ");
+        render_setup_option(time_label, time_selected, focus_time && time_selected, use_color, 20);
+        printf(" ");
+        render_setup_option(list_label, list_selected, !focus_time && list_selected, use_color, 20);
+        printf("\n");
+    }
+
+    printf("\n Left/Right: switch field  Up/Down: change option\n");
+    printf(" Enter: start run  Esc: back to main menu\n");
     fflush(stdout);
 }

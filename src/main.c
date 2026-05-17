@@ -39,6 +39,20 @@ typedef enum {
     MAIN_MENU_QUIT = 1
 } MainMenuAction;
 
+typedef struct {
+    int time_seconds;
+    WordListKind list_kind;
+} RunSetup;
+
+typedef enum {
+    RUN_SETUP_START = 0,
+    RUN_SETUP_BACK = 1,
+    RUN_SETUP_QUIT = 2
+} RunSetupAction;
+
+static const int RUN_SETUP_TIMES[] = { 15, 30, 60, 120 };
+static const WordListKind RUN_SETUP_LISTS[] = { WORD_LIST_EASY, WORD_LIST_COMMON, WORD_LIST_FULL };
+
 static void print_usage(void)
 {
     puts("Usage: cmonkey [OPTIONS]");
@@ -203,6 +217,88 @@ static MainMenuAction wait_for_main_menu_action(bool use_color)
     }
 }
 
+static size_t find_time_option_index(int seconds)
+{
+    for (size_t i = 0; i < sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0]); i++) {
+        if (RUN_SETUP_TIMES[i] == seconds) {
+            return i;
+        }
+    }
+    return 2;
+}
+
+static size_t find_list_option_index(WordListKind list_kind)
+{
+    for (size_t i = 0; i < sizeof(RUN_SETUP_LISTS) / sizeof(RUN_SETUP_LISTS[0]); i++) {
+        if (RUN_SETUP_LISTS[i] == list_kind) {
+            return i;
+        }
+    }
+    return 1;
+}
+
+static RunSetupAction wait_for_run_setup(bool use_color, RunSetup *setup)
+{
+    size_t time_idx = find_time_option_index(setup->time_seconds);
+    size_t list_idx = find_list_option_index(setup->list_kind);
+    bool focus_time = true;
+
+    while (true) {
+        terminal_render_run_setup(use_color, RUN_SETUP_TIMES[time_idx], words_list_name(RUN_SETUP_LISTS[list_idx]), focus_time);
+        const InputEvent ev = input_read_event();
+
+        if (ev.type == INPUT_CTRL_C) {
+            return RUN_SETUP_QUIT;
+        }
+        if (ev.type == INPUT_ESCAPE) {
+            return RUN_SETUP_BACK;
+        }
+        if (ev.type == INPUT_ENTER) {
+            setup->time_seconds = RUN_SETUP_TIMES[time_idx];
+            setup->list_kind = RUN_SETUP_LISTS[list_idx];
+            return RUN_SETUP_START;
+        }
+        if (ev.type == INPUT_ARROW_LEFT || ev.type == INPUT_ARROW_RIGHT) {
+            focus_time = !focus_time;
+        } else if (ev.type == INPUT_ARROW_UP) {
+            if (focus_time) {
+                time_idx = (time_idx + (sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0])) - 1) %
+                           (sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0]));
+            } else {
+                list_idx = (list_idx + (sizeof(RUN_SETUP_LISTS) / sizeof(RUN_SETUP_LISTS[0])) - 1) %
+                           (sizeof(RUN_SETUP_LISTS) / sizeof(RUN_SETUP_LISTS[0]));
+            }
+        } else if (ev.type == INPUT_ARROW_DOWN) {
+            if (focus_time) {
+                time_idx = (time_idx + 1) % (sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0]));
+            } else {
+                list_idx = (list_idx + 1) % (sizeof(RUN_SETUP_LISTS) / sizeof(RUN_SETUP_LISTS[0]));
+            }
+        }
+
+        struct timespec req = { .tv_sec = 0, .tv_nsec = 10 * 1000 * 1000 };
+        nanosleep(&req, NULL);
+    }
+}
+
+static bool wait_for_main_menu_and_setup(bool use_color, RunSetup *setup)
+{
+    while (true) {
+        const MainMenuAction action = wait_for_main_menu_action(use_color);
+        if (action == MAIN_MENU_QUIT) {
+            return false;
+        }
+
+        const RunSetupAction setup_action = wait_for_run_setup(use_color, setup);
+        if (setup_action == RUN_SETUP_START) {
+            return true;
+        }
+        if (setup_action == RUN_SETUP_QUIT) {
+            return false;
+        }
+    }
+}
+
 static int build_target(char *target,
                         size_t target_size,
                         const WordsDb *words_db,
@@ -251,11 +347,11 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    const int time_seconds = (opts.time_seconds > 0) ? opts.time_seconds : cfg.default_time;
+    int current_time_seconds = (opts.time_seconds > 0) ? opts.time_seconds : cfg.default_time;
     const int word_count = (opts.word_count > 0) ? opts.word_count : cfg.default_words;
     const bool use_color = opts.no_color ? false : cfg.color;
     const char *list_name = opts.has_list_name ? opts.list_name : cfg.word_list;
-    const WordListKind list_kind = words_list_from_name(list_name);
+    WordListKind current_list_kind = words_list_from_name(list_name);
     RunMode current_mode = opts.mode;
 
     srand((unsigned int)time(NULL));
@@ -278,20 +374,25 @@ int main(int argc, char **argv)
     char target[MAX_TEST_CHARS];
     memset(target, 0, sizeof(target));
     const bool use_main_menu = !opts.mode_set;
+    RunSetup run_setup = {
+        .time_seconds = current_time_seconds,
+        .list_kind = current_list_kind
+    };
 
     if (use_main_menu) {
-        const MainMenuAction action = wait_for_main_menu_action(use_color);
-        if (action == MAIN_MENU_QUIT) {
+        if (!wait_for_main_menu_and_setup(use_color, &run_setup)) {
             terminal_restore();
             words_free(&words_db);
             return 0;
         }
+        current_time_seconds = run_setup.time_seconds;
+        current_list_kind = run_setup.list_kind;
         current_mode = RUN_MODE_TIME;
     }
 
     while (running) {
         if (regenerate) {
-            if (build_target(target, sizeof(target), &words_db, current_mode, list_kind, time_seconds, word_count) != 0) {
+            if (build_target(target, sizeof(target), &words_db, current_mode, current_list_kind, current_time_seconds, word_count) != 0) {
                 terminal_restore();
                 fprintf(stderr, "Failed to build target text\n");
                 words_free(&words_db);
@@ -299,7 +400,7 @@ int main(int argc, char **argv)
             }
         }
 
-        const int mode_limit = (current_mode == RUN_MODE_TIME) ? time_seconds : word_count;
+        const int mode_limit = (current_mode == RUN_MODE_TIME) ? current_time_seconds : word_count;
         TestSession session;
         engine_init_session(&session, target, current_mode, mode_limit);
 
@@ -343,10 +444,13 @@ int main(int argc, char **argv)
         if (action == RESULT_QUIT) {
             running = false;
         } else if (action == RESULT_MAIN_MENU) {
-            const MainMenuAction menu_action = wait_for_main_menu_action(use_color);
-            if (menu_action == MAIN_MENU_QUIT) {
+            run_setup.time_seconds = current_time_seconds;
+            run_setup.list_kind = current_list_kind;
+            if (!wait_for_main_menu_and_setup(use_color, &run_setup)) {
                 running = false;
             } else {
+                current_time_seconds = run_setup.time_seconds;
+                current_list_kind = run_setup.list_kind;
                 current_mode = RUN_MODE_TIME;
                 regenerate = true;
             }

@@ -7,7 +7,11 @@ typedef enum {
     INPUT_BACKSPACE = 2,
     INPUT_ENTER = 3,
     INPUT_ESCAPE = 4,
-    INPUT_CTRL_C = 5
+    INPUT_CTRL_C = 5,
+    INPUT_ARROW_UP = 6,
+    INPUT_ARROW_DOWN = 7,
+    INPUT_ARROW_LEFT = 8,
+    INPUT_ARROW_RIGHT = 9
 } InputType;
 
 typedef struct {

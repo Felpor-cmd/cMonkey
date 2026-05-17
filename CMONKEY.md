@@ -141,8 +141,17 @@ cmonkey --no-color       # for terminals without color support
 
 |Key|Action|
 |---|---|
-|`1` or `Enter`|Start regular run|
+|`1` or `Enter`|Open regular run setup|
 |`q`|Quit|
+
+### Regular run setup controls
+
+|Key|Action|
+|---|---|
+|`Left` / `Right`|Switch between **Time** and **Difficulty** selectors|
+|`Up` / `Down`|Change the selected option in the active selector|
+|`Enter`|Start run with selected settings|
+|`Esc`|Back to main menu|
 
 ### After-run controls
 

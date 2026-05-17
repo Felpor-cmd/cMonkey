@@ -27,4 +27,7 @@ void terminal_render_results(const TestSession *session, const Metrics *metrics,
 /** Render the startup main menu. */
 void terminal_render_main_menu(bool use_color);
 
+/** Render the regular-run setup screen with time and difficulty selectors. */
+void terminal_render_run_setup(bool use_color, int selected_time_seconds, const char *selected_list_name, bool focus_time);
+
 #endif
