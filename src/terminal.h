@@ -24,4 +24,7 @@ void terminal_render_test(const TestSession *session, const Metrics *metrics, lo
 /** Render the post-run results screen. */
 void terminal_render_results(const TestSession *session, const Metrics *metrics, bool use_color);
 
+/** Render the startup main menu. */
+void terminal_render_main_menu(bool use_color);
+
 #endif

@@ -30,6 +30,7 @@
 ## Features
 
 - **Offline-first** — all word lists are bundled into the binary; no network call ever made
+- **Game-style launch** — starts on a main menu screen before entering a run
 - **Real-time feedback** — correct characters shown in white, errors in red, as you type
 - **Multiple modes** — timed test, word-count test, and quote mode
 - **Full metrics** — WPM (net & raw), accuracy, error count, consistency, and elapsed time
@@ -40,6 +41,19 @@
 ---
 
 ## Demo
+
+Main menu shown on startup:
+
+```
+ cmonkey
+
+ Main Menu
+
+ [1] Regular run
+ [q] Quit
+```
+
+Typing screen during a run:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -105,7 +119,7 @@ Options:
 ### Examples
 
 ```bash
-cmonkey                  # 60-second timed test with common words
+cmonkey                  # opens main menu, choose [1] for regular run
 cmonkey -t 30            # 30-second sprint
 cmonkey -t 120           # 2-minute endurance run
 cmonkey -w 50            # type exactly 50 words, time recorded
@@ -122,6 +136,13 @@ cmonkey --no-color       # for terminals without color support
 |`Backspace`|Delete the last character|
 |`Escape`|Abort the current test|
 |`Ctrl+C`|Quit (terminal is restored)|
+
+### Main menu controls
+
+|Key|Action|
+|---|---|
+|`1` or `Enter`|Start regular run|
+|`q`|Quit|
 
 ---
 

@@ -17,6 +17,7 @@
 
 typedef struct {
     RunMode mode;
+    bool mode_set;
     int time_seconds;
     int word_count;
     bool no_color;
@@ -31,6 +32,11 @@ typedef enum {
     RESULT_RETRY_NEW = 1,
     RESULT_QUIT = 2
 } ResultAction;
+
+typedef enum {
+    MAIN_MENU_START = 0,
+    MAIN_MENU_QUIT = 1
+} MainMenuAction;
 
 static void print_usage(void)
 {
@@ -85,6 +91,7 @@ static int parse_args(int argc, char **argv, CliOptions *opts)
         }
         if (strcmp(arg, "-q") == 0) {
             opts->mode = RUN_MODE_QUOTE;
+            opts->mode_set = true;
             continue;
         }
         if (strcmp(arg, "-t") == 0) {
@@ -93,6 +100,7 @@ static int parse_args(int argc, char **argv, CliOptions *opts)
                 return -1;
             }
             opts->mode = RUN_MODE_TIME;
+            opts->mode_set = true;
             continue;
         }
         if (strcmp(arg, "-w") == 0) {
@@ -101,6 +109,7 @@ static int parse_args(int argc, char **argv, CliOptions *opts)
                 return -1;
             }
             opts->mode = RUN_MODE_WORD;
+            opts->mode_set = true;
             continue;
         }
         if (strcmp(arg, "--list") == 0) {
@@ -156,6 +165,32 @@ static ResultAction wait_for_results_action(void)
             }
             if (ev.ch == 'q' || ev.ch == 'Q') {
                 return RESULT_QUIT;
+            }
+        }
+
+        struct timespec req = { .tv_sec = 0, .tv_nsec = 10 * 1000 * 1000 };
+        nanosleep(&req, NULL);
+    }
+}
+
+static MainMenuAction wait_for_main_menu_action(bool use_color)
+{
+    while (true) {
+        terminal_render_main_menu(use_color);
+        const InputEvent ev = input_read_event();
+
+        if (ev.type == INPUT_ENTER) {
+            return MAIN_MENU_START;
+        }
+        if (ev.type == INPUT_ESCAPE || ev.type == INPUT_CTRL_C) {
+            return MAIN_MENU_QUIT;
+        }
+        if (ev.type == INPUT_CHAR) {
+            if (ev.ch == '1' || ev.ch == 's' || ev.ch == 'S') {
+                return MAIN_MENU_START;
+            }
+            if (ev.ch == 'q' || ev.ch == 'Q') {
+                return MAIN_MENU_QUIT;
             }
         }
 
@@ -238,6 +273,16 @@ int main(int argc, char **argv)
     bool regenerate = true;
     char target[MAX_TEST_CHARS];
     memset(target, 0, sizeof(target));
+    const bool use_main_menu = !opts.mode_set;
+
+    if (use_main_menu) {
+        const MainMenuAction action = wait_for_main_menu_action(use_color);
+        if (action == MAIN_MENU_QUIT) {
+            terminal_restore();
+            words_free(&words_db);
+            return 0;
+        }
+    }
 
     while (running) {
         if (regenerate) {

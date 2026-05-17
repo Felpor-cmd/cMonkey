@@ -24,6 +24,18 @@ static const char *color(bool use_color, const char *code)
     return use_color ? code : "";
 }
 
+static void render_logo(bool use_color)
+{
+    printf("%s%s", color(use_color, ANSI_BOLD), color(use_color, ANSI_WHITE));
+    printf("                            _\n");
+    printf("  ___ _ __ ___   ___  _ __ | | _____ _   _\n");
+    printf(" / __| '_ ` _ \\ / _ \\| '_ \\| |/ / _ \\ | | |\n");
+    printf("| (__| | | | | | (_) | | | |   <  __/ |_| |\n");
+    printf(" \\___|_| |_| |_|\\___/|_| |_|_|\\_\\___|\\__, |\n");
+    printf("                                       |__/\n");
+    printf("%s\n", color(use_color, ANSI_RESET));
+}
+
 static void draw_progress_bar(double progress, int width, bool use_color)
 {
     if (progress < 0.0) {
@@ -107,7 +119,7 @@ void terminal_render_test(const TestSession *session, const Metrics *metrics, lo
     terminal_clear_screen();
     fputs(CURSOR_HIDE, stdout);
 
-    printf("%s%s cmonkey %s\n\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_WHITE), color(use_color, ANSI_RESET));
+    render_logo(use_color);
     printf(" Target\n ");
 
     int col = 1;
@@ -185,5 +197,18 @@ void terminal_render_results(const TestSession *session, const Metrics *metrics,
     printf(" Consistency     %.1f %%\n", metrics->consistency);
     printf(" Time            %.1f s\n", metrics->elapsed_s);
     printf("\n [Enter] retry   [r] new words   [q] quit\n");
+    fflush(stdout);
+}
+
+void terminal_render_main_menu(bool use_color)
+{
+    terminal_clear_screen();
+    fputs(CURSOR_HIDE, stdout);
+
+    render_logo(use_color);
+    printf(" %sMain Menu%s\n\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+    printf(" [1] Regular run\n");
+    printf(" [q] Quit\n");
+    printf("\n Select an option and press Enter.\n");
     fflush(stdout);
 }
