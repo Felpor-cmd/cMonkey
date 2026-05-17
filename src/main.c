@@ -47,7 +47,7 @@ static void print_usage(void)
     puts("  -t <seconds>      Time mode — type for N seconds (default: 60)");
     puts("  -w <words>        Word mode — type exactly N words");
     puts("  -q                Quote mode — type a random passage");
-    puts("  --list <name>     Word list to use: easy, common, full (default: common)");
+    puts("  --list <name>     Word list: easy, common (40/30/20/10 mix), full");
     puts("  --no-color        Disable ANSI color output");
     puts("  -h, --help        Show this help message");
     puts("  -v, --version     Print version and exit");

@@ -34,6 +34,24 @@ static const char *FALLBACK_QUOTES[] = {
     "clarity comes from action not from overthinking"
 };
 
+typedef enum {
+    WORD_DIFFICULTY_EASY = 0,
+    WORD_DIFFICULTY_MEDIUM = 1,
+    WORD_DIFFICULTY_HARD = 2,
+    WORD_DIFFICULTY_EXTRA_HARD = 3
+} WordDifficulty;
+
+typedef struct {
+    const char **words;
+    size_t count;
+} WordBucket;
+
+enum {
+    HARD_MIN_LEN = 8,
+    HARD_MAX_LEN = 10,
+    EXTRA_HARD_MIN_LEN = 11
+};
+
 static void free_owned_list(const char **list, size_t count, bool owned)
 {
     if (!owned || list == NULL) {
@@ -117,6 +135,183 @@ static int load_lines_file(const char *path, const char ***out_list, size_t *out
     *out_list = (const char **)list;
     *out_count = count;
     return 0;
+}
+
+static int build_length_bucket(const char **source,
+                               size_t source_count,
+                               size_t min_len,
+                               size_t max_len,
+                               WordBucket *out_bucket)
+{
+    memset(out_bucket, 0, sizeof(*out_bucket));
+    if (source == NULL || source_count == 0) {
+        return 0;
+    }
+
+    const char **bucket = malloc(source_count * sizeof(*bucket));
+    if (bucket == NULL) {
+        return -1;
+    }
+
+    size_t count = 0;
+    for (size_t i = 0; i < source_count; i++) {
+        const size_t len = strlen(source[i]);
+        if (len < min_len) {
+            continue;
+        }
+        if (max_len > 0 && len > max_len) {
+            continue;
+        }
+        bucket[count++] = source[i];
+    }
+
+    if (count == 0) {
+        free((void *)bucket);
+        return 0;
+    }
+
+    out_bucket->words = bucket;
+    out_bucket->count = count;
+    return 0;
+}
+
+static void free_bucket(WordBucket *bucket)
+{
+    free((void *)bucket->words);
+    bucket->words = NULL;
+    bucket->count = 0;
+}
+
+static WordDifficulty random_difficulty(void)
+{
+    const int roll = rand() % 100;
+    if (roll < 40) {
+        return WORD_DIFFICULTY_EASY;
+    }
+    if (roll < 70) {
+        return WORD_DIFFICULTY_MEDIUM;
+    }
+    if (roll < 90) {
+        return WORD_DIFFICULTY_HARD;
+    }
+    return WORD_DIFFICULTY_EXTRA_HARD;
+}
+
+static const char *pick_random_word(const char **list, size_t count, const char *prev_word)
+{
+    if (list == NULL || count == 0) {
+        return NULL;
+    }
+
+    size_t idx = (size_t)rand() % count;
+    if (prev_word != NULL && count > 1) {
+        for (size_t attempt = 0; attempt < 16; attempt++) {
+            if (strcmp(list[idx], prev_word) != 0) {
+                break;
+            }
+            idx = (size_t)rand() % count;
+        }
+    }
+
+    return list[idx];
+}
+
+static const char *pick_weighted_word(const WordsDb *db,
+                                      const WordBucket *hard_words,
+                                      const WordBucket *extra_hard_words,
+                                      const char *prev_word)
+{
+    for (size_t attempt = 0; attempt < 8; attempt++) {
+        const char **list = NULL;
+        size_t count = 0;
+
+        switch (random_difficulty()) {
+        case WORD_DIFFICULTY_EASY:
+            list = db->easy_words;
+            count = db->easy_count;
+            break;
+        case WORD_DIFFICULTY_MEDIUM:
+            list = db->common_words;
+            count = db->common_count;
+            break;
+        case WORD_DIFFICULTY_HARD:
+            if (hard_words->count > 0) {
+                list = hard_words->words;
+                count = hard_words->count;
+            } else {
+                list = db->full_words;
+                count = db->full_count;
+            }
+            break;
+        case WORD_DIFFICULTY_EXTRA_HARD:
+            if (extra_hard_words->count > 0) {
+                list = extra_hard_words->words;
+                count = extra_hard_words->count;
+            } else {
+                list = db->full_words;
+                count = db->full_count;
+            }
+            break;
+        }
+
+        const char *picked = pick_random_word(list, count, prev_word);
+        if (picked != NULL) {
+            return picked;
+        }
+    }
+
+    return pick_random_word(db->common_words, db->common_count, prev_word);
+}
+
+static int words_build_weighted_target(const WordsDb *db, int word_count, char *out, size_t out_size)
+{
+    if (db == NULL || out == NULL || out_size == 0 || word_count <= 0) {
+        return -1;
+    }
+
+    WordBucket hard_words;
+    WordBucket extra_hard_words;
+    if (build_length_bucket(db->full_words, db->full_count, HARD_MIN_LEN, HARD_MAX_LEN, &hard_words) != 0) {
+        return -1;
+    }
+    if (build_length_bucket(db->full_words, db->full_count, EXTRA_HARD_MIN_LEN, 0, &extra_hard_words) != 0) {
+        free_bucket(&hard_words);
+        return -1;
+    }
+
+    size_t pos = 0;
+    const char *prev_word = NULL;
+    int result = 0;
+
+    for (int i = 0; i < word_count; i++) {
+        const char *word = pick_weighted_word(db, &hard_words, &extra_hard_words, prev_word);
+        if (word == NULL) {
+            result = -1;
+            break;
+        }
+
+        const size_t len = strlen(word);
+        const bool needs_space = (i + 1) < word_count;
+        if (pos + len + (needs_space ? 1 : 0) + 1 > out_size) {
+            result = -1;
+            break;
+        }
+
+        memcpy(out + pos, word, len);
+        pos += len;
+        if (needs_space) {
+            out[pos++] = ' ';
+        }
+        prev_word = word;
+    }
+
+    if (result == 0) {
+        out[pos] = '\0';
+    }
+
+    free_bucket(&hard_words);
+    free_bucket(&extra_hard_words);
+    return result;
 }
 
 static int load_from_data_candidates(const char *filename, const char ***out_list, size_t *out_count)
@@ -219,6 +414,10 @@ int words_build_target(const WordsDb *db, WordListKind list_kind, int word_count
 {
     if (out == NULL || out_size == 0 || word_count <= 0) {
         return -1;
+    }
+
+    if (list_kind == WORD_LIST_COMMON) {
+        return words_build_weighted_target(db, word_count, out, out_size);
     }
 
     size_t list_count = 0;

@@ -40,7 +40,7 @@ WordListKind words_list_from_name(const char *name);
 /** Return canonical list name for a list kind. */
 const char *words_list_name(WordListKind kind);
 
-/** Build a target string made of random words from the selected list. */
+/** Build a target string; common mode uses weighted difficulty generation. */
 int words_build_target(const WordsDb *db, WordListKind list_kind, int word_count, char *out, size_t out_size);
 
 /** Select one random quote into out. */

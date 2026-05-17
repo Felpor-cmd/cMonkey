@@ -110,7 +110,7 @@ Options:
   -t <seconds>      Time mode — type for N seconds (default: 60)
   -w <words>        Word mode — type exactly N words
   -q                Quote mode — type a random passage
-  --list <name>     Word list to use: easy, common, full (default: common)
+  --list <name>     Word list: easy, common (40/30/20/10 mix), full
   --no-color        Disable ANSI color output
   -h, --help        Show this help message
   -v, --version     Print version and exit
@@ -179,7 +179,7 @@ cmonkey reads `~/.config/cmonkey/config` on startup. The file is created with de
 
 default_time   = 60        # default seconds for timed mode
 default_words  = 25        # default word count for word mode
-word_list      = common    # easy | common | full
+word_list      = common    # easy | common (40/30/20/10 mix) | full
 color          = true      # enable ANSI colors
 ```
 
