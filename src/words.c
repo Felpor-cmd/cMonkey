@@ -228,8 +228,16 @@ int words_build_target(const WordsDb *db, WordListKind list_kind, int word_count
     }
 
     size_t pos = 0;
+    size_t prev_idx = list_count;
     for (int i = 0; i < word_count; i++) {
-        const char *word = list[rand() % list_count];
+        size_t idx = (size_t)rand() % list_count;
+        if (list_count > 1) {
+            while (idx == prev_idx) {
+                idx = (size_t)rand() % list_count;
+            }
+        }
+
+        const char *word = list[idx];
         const size_t len = strlen(word);
         const bool needs_space = (i + 1) < word_count;
 
@@ -243,6 +251,8 @@ int words_build_target(const WordsDb *db, WordListKind list_kind, int word_count
         if (needs_space) {
             out[pos++] = ' ';
         }
+
+        prev_idx = idx;
     }
 
     out[pos] = '\0';
