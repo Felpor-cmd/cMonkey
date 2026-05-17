@@ -196,7 +196,7 @@ void terminal_render_results(const TestSession *session, const Metrics *metrics,
     printf(" Errors          %d\n", metrics->error_count);
     printf(" Consistency     %.1f %%\n", metrics->consistency);
     printf(" Time            %.1f s\n", metrics->elapsed_s);
-    printf("\n [Enter] retry   [r] new words   [q] quit\n");
+    printf("\n [Enter] new game   [r] retry same   [m] main menu   [q] quit\n");
     fflush(stdout);
 }
 

@@ -80,7 +80,7 @@ Results screen after the test:
   Consistency     91.4 %
   Time             60 s
   ─────────────────────────────────────────────────────────
-  [Enter] retry   [r] new words   [q] quit
+  [Enter] new game   [r] retry same   [m] main menu   [q] quit
 ```
 
 ---
@@ -142,6 +142,15 @@ cmonkey --no-color       # for terminals without color support
 |Key|Action|
 |---|---|
 |`1` or `Enter`|Start regular run|
+|`q`|Quit|
+
+### After-run controls
+
+|Key|Action|
+|---|---|
+|`r`|Retry the same target text|
+|`Enter`|Start a new game with a new target|
+|`m`|Return to main menu|
 |`q`|Quit|
 
 ---

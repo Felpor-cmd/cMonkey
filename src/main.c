@@ -30,7 +30,8 @@ typedef struct {
 typedef enum {
     RESULT_RETRY_SAME = 0,
     RESULT_RETRY_NEW = 1,
-    RESULT_QUIT = 2
+    RESULT_MAIN_MENU = 2,
+    RESULT_QUIT = 3
 } ResultAction;
 
 typedef enum {
@@ -154,14 +155,17 @@ static ResultAction wait_for_results_action(void)
         const InputEvent ev = input_read_event();
 
         if (ev.type == INPUT_ENTER) {
-            return RESULT_RETRY_SAME;
+            return RESULT_RETRY_NEW;
         }
         if (ev.type == INPUT_ESCAPE || ev.type == INPUT_CTRL_C) {
             return RESULT_QUIT;
         }
         if (ev.type == INPUT_CHAR) {
             if (ev.ch == 'r' || ev.ch == 'R') {
-                return RESULT_RETRY_NEW;
+                return RESULT_RETRY_SAME;
+            }
+            if (ev.ch == 'm' || ev.ch == 'M') {
+                return RESULT_MAIN_MENU;
             }
             if (ev.ch == 'q' || ev.ch == 'Q') {
                 return RESULT_QUIT;
@@ -252,7 +256,7 @@ int main(int argc, char **argv)
     const bool use_color = opts.no_color ? false : cfg.color;
     const char *list_name = opts.has_list_name ? opts.list_name : cfg.word_list;
     const WordListKind list_kind = words_list_from_name(list_name);
-    const RunMode mode = opts.mode;
+    RunMode current_mode = opts.mode;
 
     srand((unsigned int)time(NULL));
 
@@ -282,11 +286,12 @@ int main(int argc, char **argv)
             words_free(&words_db);
             return 0;
         }
+        current_mode = RUN_MODE_TIME;
     }
 
     while (running) {
         if (regenerate) {
-            if (build_target(target, sizeof(target), &words_db, mode, list_kind, time_seconds, word_count) != 0) {
+            if (build_target(target, sizeof(target), &words_db, current_mode, list_kind, time_seconds, word_count) != 0) {
                 terminal_restore();
                 fprintf(stderr, "Failed to build target text\n");
                 words_free(&words_db);
@@ -294,9 +299,9 @@ int main(int argc, char **argv)
             }
         }
 
-        const int mode_limit = (mode == RUN_MODE_TIME) ? time_seconds : word_count;
+        const int mode_limit = (current_mode == RUN_MODE_TIME) ? time_seconds : word_count;
         TestSession session;
-        engine_init_session(&session, target, mode, mode_limit);
+        engine_init_session(&session, target, current_mode, mode_limit);
 
         bool interrupted = false;
 
@@ -337,6 +342,14 @@ int main(int argc, char **argv)
         const ResultAction action = wait_for_results_action();
         if (action == RESULT_QUIT) {
             running = false;
+        } else if (action == RESULT_MAIN_MENU) {
+            const MainMenuAction menu_action = wait_for_main_menu_action(use_color);
+            if (menu_action == MAIN_MENU_QUIT) {
+                running = false;
+            } else {
+                current_mode = RUN_MODE_TIME;
+                regenerate = true;
+            }
         } else if (action == RESULT_RETRY_NEW) {
             regenerate = true;
         } else {
