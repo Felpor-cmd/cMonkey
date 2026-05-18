@@ -303,6 +303,8 @@ void terminal_render_main_menu(bool use_color)
     render_logo(use_color);
     printf(" %sMain Menu%s\n\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
     printf(" [1] Regular run\n");
+    printf(" [2] Quotes\n");
+    printf(" [3] Custom\n");
     printf(" [q] Quit\n");
     printf("\n Select an option and press Enter.\n");
     fflush(stdout);
@@ -321,7 +323,7 @@ static void render_setup_option(const char *label, bool selected, bool focused, 
     printf("%s  %-*s%s", color(use_color, ANSI_DIM), width - 2, label, color(use_color, ANSI_RESET));
 }
 
-void terminal_render_run_setup(bool use_color, int selected_time_seconds, const char *selected_list_name, bool focus_time)
+void terminal_render_run_setup(bool use_color, const char *title, int selected_time_seconds, const char *selected_list_name, bool focus_time)
 {
     static const int time_options[] = { 15, 30, 60, 120 };
     static const char *list_options[] = { "easy", "common", "full" };
@@ -331,7 +333,10 @@ void terminal_render_run_setup(bool use_color, int selected_time_seconds, const 
     fputs(CURSOR_HIDE, stdout);
     render_logo(use_color);
 
-    printf(" %sRegular Run Setup%s\n\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+    printf(" %s%s%s\n\n",
+           color(use_color, ANSI_BOLD),
+           (title != NULL) ? title : "Run Setup",
+           color(use_color, ANSI_RESET));
     printf(" %sTime%s                %sDifficulty%s\n",
            color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET),
            color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
@@ -359,6 +364,39 @@ void terminal_render_run_setup(bool use_color, int selected_time_seconds, const 
     }
 
     printf("\n Left/Right: switch field  Up/Down: change option\n");
+    printf(" Enter: start run  Esc: back to main menu\n");
+    fflush(stdout);
+}
+
+void terminal_render_custom_setup(bool use_color, int selected_time_seconds, const char *const *file_names, size_t file_count)
+{
+    static const int time_options[] = { 15, 30, 60, 120 };
+
+    terminal_clear_screen();
+    fputs(CURSOR_HIDE, stdout);
+    render_logo(use_color);
+
+    printf(" %sCustom Setup%s\n\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+    printf(" %sTime%s\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+
+    for (size_t i = 0; i < sizeof(time_options) / sizeof(time_options[0]); i++) {
+        char label[16];
+        snprintf(label, sizeof(label), "%ds", time_options[i]);
+        printf(" ");
+        render_setup_option(label, time_options[i] == selected_time_seconds, time_options[i] == selected_time_seconds, use_color, 20);
+        printf("\n");
+    }
+
+    printf("\n %sdata/custom files%s\n", color(use_color, ANSI_BOLD), color(use_color, ANSI_RESET));
+    if (file_count == 0) {
+        printf(" %s(no readable .txt files found)%s\n", color(use_color, ANSI_RED), color(use_color, ANSI_RESET));
+    } else {
+        for (size_t i = 0; i < file_count; i++) {
+            printf(" - %s\n", file_names[i]);
+        }
+    }
+
+    printf("\n Up/Down: change time\n");
     printf(" Enter: start run  Esc: back to main menu\n");
     fflush(stdout);
 }

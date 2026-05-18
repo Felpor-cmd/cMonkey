@@ -2,6 +2,7 @@
 #define CMONKEY_TERMINAL_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "engine.h"
 #include "metrics.h"
@@ -27,7 +28,10 @@ void terminal_render_results(const TestSession *session, const Metrics *metrics,
 /** Render the startup main menu. */
 void terminal_render_main_menu(bool use_color);
 
-/** Render the regular-run setup screen with time and difficulty selectors. */
-void terminal_render_run_setup(bool use_color, int selected_time_seconds, const char *selected_list_name, bool focus_time);
+/** Render a run setup screen with time and difficulty selectors. */
+void terminal_render_run_setup(bool use_color, const char *title, int selected_time_seconds, const char *selected_list_name, bool focus_time);
+
+/** Render custom-mode setup with time selector and discovered file list. */
+void terminal_render_custom_setup(bool use_color, int selected_time_seconds, const char *const *file_names, size_t file_count);
 
 #endif

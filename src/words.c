@@ -1,5 +1,6 @@
 #include "words.h"
 
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,7 +50,9 @@ typedef struct {
 enum {
     HARD_MIN_LEN = 8,
     HARD_MAX_LEN = 10,
-    EXTRA_HARD_MIN_LEN = 11
+    EXTRA_HARD_MIN_LEN = 11,
+    QUOTE_EASY_MAX_WORDS = 8,
+    QUOTE_COMMON_MAX_WORDS = 14
 };
 
 static void free_owned_list(const char **list, size_t count, bool owned)
@@ -135,6 +138,140 @@ static int load_lines_file(const char *path, const char ***out_list, size_t *out
     *out_list = (const char **)list;
     *out_count = count;
     return 0;
+}
+
+static int count_words_in_text(const char *text)
+{
+    int count = 0;
+    bool in_word = false;
+
+    for (const char *p = text; *p != '\0'; p++) {
+        if (*p == ' ' || *p == '\t') {
+            in_word = false;
+            continue;
+        }
+        if (!in_word) {
+            count++;
+            in_word = true;
+        }
+    }
+    return count;
+}
+
+static bool has_txt_extension(const char *name)
+{
+    const size_t len = strlen(name);
+    return len >= 4 && strcmp(name + len - 4, ".txt") == 0;
+}
+
+static int compare_strings(const void *a, const void *b)
+{
+    const char *const *sa = (const char *const *)a;
+    const char *const *sb = (const char *const *)b;
+    return strcmp(*sa, *sb);
+}
+
+static int append_copy_string(char ***list, size_t *count, size_t *cap, const char *value)
+{
+    if (*count == *cap) {
+        const size_t next_cap = (*cap == 0) ? 8 : (*cap * 2);
+        char **tmp = realloc(*list, next_cap * sizeof(*tmp));
+        if (tmp == NULL) {
+            return -1;
+        }
+        *list = tmp;
+        *cap = next_cap;
+    }
+
+    char *copy = strdup(value);
+    if (copy == NULL) {
+        return -1;
+    }
+
+    (*list)[(*count)++] = copy;
+    return 0;
+}
+
+static int load_custom_from_dir(const char *dir_path,
+                                const char ***out_lines,
+                                size_t *out_line_count,
+                                const char ***out_files,
+                                size_t *out_file_count)
+{
+    DIR *dir = opendir(dir_path);
+    if (dir == NULL) {
+        return -1;
+    }
+
+    char **lines = NULL;
+    size_t line_count = 0;
+    size_t line_cap = 0;
+    char **files = NULL;
+    size_t file_count = 0;
+    size_t file_cap = 0;
+    struct dirent *entry = NULL;
+    char path[1024];
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.' || !has_txt_extension(entry->d_name)) {
+            continue;
+        }
+
+        if (append_copy_string(&files, &file_count, &file_cap, entry->d_name) != 0) {
+            goto fail;
+        }
+
+        if (snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name) >= (int)sizeof(path)) {
+            goto fail;
+        }
+
+        const char **file_lines = NULL;
+        size_t file_line_count = 0;
+        if (load_lines_file(path, &file_lines, &file_line_count) == 0) {
+            for (size_t i = 0; i < file_line_count; i++) {
+                if (append_copy_string(&lines, &line_count, &line_cap, file_lines[i]) != 0) {
+                    free_owned_list(file_lines, file_line_count, true);
+                    goto fail;
+                }
+            }
+            free_owned_list(file_lines, file_line_count, true);
+        }
+    }
+
+    closedir(dir);
+
+    if (file_count == 0 || line_count == 0) {
+        free_owned_list((const char **)lines, line_count, true);
+        free_owned_list((const char **)files, file_count, true);
+        return -1;
+    }
+
+    qsort(files, file_count, sizeof(*files), compare_strings);
+    *out_lines = (const char **)lines;
+    *out_line_count = line_count;
+    *out_files = (const char **)files;
+    *out_file_count = file_count;
+    return 0;
+
+fail:
+    closedir(dir);
+    free_owned_list((const char **)lines, line_count, true);
+    free_owned_list((const char **)files, file_count, true);
+    return -1;
+}
+
+static int load_custom_from_candidates(const char ***out_lines,
+                                       size_t *out_line_count,
+                                       const char ***out_files,
+                                       size_t *out_file_count)
+{
+    const char *prefixes[] = { "data/custom", "./data/custom", "/usr/local/share/cmonkey/custom" };
+    for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); i++) {
+        if (load_custom_from_dir(prefixes[i], out_lines, out_line_count, out_files, out_file_count) == 0) {
+            return 0;
+        }
+    }
+    return -1;
 }
 
 static int build_length_bucket(const char **source,
@@ -314,6 +451,103 @@ static int words_build_weighted_target(const WordsDb *db, int word_count, char *
     return result;
 }
 
+static bool quote_matches_difficulty(const char *quote, WordListKind list_kind)
+{
+    const int words = count_words_in_text(quote);
+    if (words <= 0) {
+        return false;
+    }
+    if (list_kind == WORD_LIST_EASY) {
+        return words <= QUOTE_EASY_MAX_WORDS;
+    }
+    if (list_kind == WORD_LIST_FULL) {
+        return words > QUOTE_COMMON_MAX_WORDS;
+    }
+    return words > QUOTE_EASY_MAX_WORDS && words <= QUOTE_COMMON_MAX_WORDS;
+}
+
+static const char *pick_random_line(const char **lines, size_t line_count, const char *prev_line)
+{
+    if (lines == NULL || line_count == 0) {
+        return NULL;
+    }
+
+    size_t idx = (size_t)rand() % line_count;
+    if (prev_line != NULL && line_count > 1) {
+        for (size_t attempt = 0; attempt < 16; attempt++) {
+            if (strcmp(lines[idx], prev_line) != 0) {
+                break;
+            }
+            idx = (size_t)rand() % line_count;
+        }
+    }
+    return lines[idx];
+}
+
+static const char *pick_quote_line(const WordsDb *db, WordListKind list_kind, const char *prev_line)
+{
+    if (db->quotes == NULL || db->quote_count == 0) {
+        return NULL;
+    }
+
+    for (size_t attempt = 0; attempt < db->quote_count * 2; attempt++) {
+        const char *quote = db->quotes[(size_t)rand() % db->quote_count];
+        if (!quote_matches_difficulty(quote, list_kind)) {
+            continue;
+        }
+        if (prev_line != NULL && db->quote_count > 1 && strcmp(quote, prev_line) == 0) {
+            continue;
+        }
+        return quote;
+    }
+
+    return pick_random_line(db->quotes, db->quote_count, prev_line);
+}
+
+static int build_target_from_lines(const char **lines,
+                                   size_t line_count,
+                                   int target_word_count,
+                                   char *out,
+                                   size_t out_size)
+{
+    if (lines == NULL || line_count == 0 || target_word_count <= 0 || out == NULL || out_size == 0) {
+        return -1;
+    }
+
+    size_t pos = 0;
+    int words_total = 0;
+    const char *prev_line = NULL;
+
+    while (words_total < target_word_count) {
+        const char *line = pick_random_line(lines, line_count, prev_line);
+        if (line == NULL) {
+            return -1;
+        }
+
+        const int line_word_count = count_words_in_text(line);
+        if (line_word_count <= 0) {
+            continue;
+        }
+
+        const size_t len = strlen(line);
+        const bool needs_space = pos > 0;
+        if (pos + (needs_space ? 1 : 0) + len + 1 > out_size) {
+            return -1;
+        }
+
+        if (needs_space) {
+            out[pos++] = ' ';
+        }
+        memcpy(out + pos, line, len);
+        pos += len;
+        words_total += line_word_count;
+        prev_line = line;
+    }
+
+    out[pos] = '\0';
+    return 0;
+}
+
 static int load_from_data_candidates(const char *filename, const char ***out_list, size_t *out_count)
 {
     const char *prefixes[] = { "data", "./data", "/usr/local/share/cmonkey" };
@@ -376,6 +610,11 @@ int words_init(WordsDb *db)
         db->quote_count = sizeof(FALLBACK_QUOTES) / sizeof(FALLBACK_QUOTES[0]);
     }
 
+    if (load_custom_from_candidates(&db->custom_lines, &db->custom_line_count, &db->custom_files, &db->custom_file_count) == 0) {
+        db->custom_lines_owned = true;
+        db->custom_files_owned = true;
+    }
+
     return 0;
 }
 
@@ -385,6 +624,8 @@ void words_free(WordsDb *db)
     free_owned_list(db->common_words, db->common_count, db->common_owned);
     free_owned_list(db->full_words, db->full_count, db->full_owned);
     free_owned_list(db->quotes, db->quote_count, db->quotes_owned);
+    free_owned_list(db->custom_lines, db->custom_line_count, db->custom_lines_owned);
+    free_owned_list(db->custom_files, db->custom_file_count, db->custom_files_owned);
     memset(db, 0, sizeof(*db));
 }
 
@@ -470,4 +711,69 @@ int words_random_quote(const WordsDb *db, char *out, size_t out_size)
     }
     strcpy(out, quote);
     return 0;
+}
+
+int words_build_quote_target(const WordsDb *db, WordListKind list_kind, int word_count, char *out, size_t out_size)
+{
+    if (db == NULL || db->quotes == NULL || db->quote_count == 0) {
+        return -1;
+    }
+
+    if (word_count <= 0 || out == NULL || out_size == 0) {
+        return -1;
+    }
+
+    size_t pos = 0;
+    int words_total = 0;
+    const char *prev_quote = NULL;
+
+    while (words_total < word_count) {
+        const char *quote = pick_quote_line(db, list_kind, prev_quote);
+        if (quote == NULL) {
+            return -1;
+        }
+
+        const int quote_words = count_words_in_text(quote);
+        if (quote_words <= 0) {
+            continue;
+        }
+
+        const size_t len = strlen(quote);
+        const bool needs_space = pos > 0;
+        if (pos + (needs_space ? 1 : 0) + len + 1 > out_size) {
+            return -1;
+        }
+
+        if (needs_space) {
+            out[pos++] = ' ';
+        }
+        memcpy(out + pos, quote, len);
+        pos += len;
+        words_total += quote_words;
+        prev_quote = quote;
+    }
+
+    out[pos] = '\0';
+    return 0;
+}
+
+int words_build_custom_target(const WordsDb *db, int word_count, char *out, size_t out_size)
+{
+    if (db == NULL) {
+        return -1;
+    }
+    return build_target_from_lines(db->custom_lines, db->custom_line_count, word_count, out, out_size);
+}
+
+size_t words_custom_file_count(const WordsDb *db)
+{
+    return db != NULL ? db->custom_file_count : 0;
+}
+
+const char *words_custom_file_name(const WordsDb *db, size_t index)
+{
+    if (db == NULL || index >= db->custom_file_count) {
+        return NULL;
+    }
+    return db->custom_files[index];
 }

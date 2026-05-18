@@ -50,6 +50,8 @@ Main menu shown on startup:
  Main Menu
 
  [1] Regular run
+ [2] Quotes
+ [3] Custom
  [q] Quit
 ```
 
@@ -142,6 +144,8 @@ cmonkey --no-color       # for terminals without color support
 |Key|Action|
 |---|---|
 |`1` or `Enter`|Open regular run setup|
+|`2`|Start quotes mode directly (no time/difficulty setup)|
+|`3`|Open custom setup (time + discovered `data/custom/*.txt` files)|
 |`q`|Quit|
 
 ### Regular run setup controls
@@ -151,6 +155,14 @@ cmonkey --no-color       # for terminals without color support
 |`Left` / `Right`|Switch between **Time** and **Difficulty** selectors|
 |`Up` / `Down`|Change the selected option in the active selector|
 |`Enter`|Start run with selected settings|
+|`Esc`|Back to main menu|
+
+### Custom setup controls
+
+|Key|Action|
+|---|---|
+|`Up` / `Down`|Change the **Time** option|
+|`Enter`|Start custom run (when at least one `.txt` file is available)|
 |`Esc`|Back to main menu|
 
 ### After-run controls

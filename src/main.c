@@ -35,14 +35,21 @@ typedef enum {
 } ResultAction;
 
 typedef enum {
-    MAIN_MENU_START = 0,
-    MAIN_MENU_QUIT = 1
+    MAIN_MENU_REGULAR = 0,
+    MAIN_MENU_QUOTES = 1,
+    MAIN_MENU_CUSTOM = 2,
+    MAIN_MENU_QUIT = 3
 } MainMenuAction;
 
 typedef struct {
     int time_seconds;
     WordListKind list_kind;
 } RunSetup;
+
+typedef enum {
+    CONTENT_WORDS = 0,
+    CONTENT_CUSTOM = 1
+} ContentMode;
 
 typedef enum {
     RUN_SETUP_START = 0,
@@ -198,14 +205,20 @@ static MainMenuAction wait_for_main_menu_action(bool use_color)
         const InputEvent ev = input_read_event();
 
         if (ev.type == INPUT_ENTER) {
-            return MAIN_MENU_START;
+            return MAIN_MENU_REGULAR;
         }
         if (ev.type == INPUT_ESCAPE || ev.type == INPUT_CTRL_C) {
             return MAIN_MENU_QUIT;
         }
         if (ev.type == INPUT_CHAR) {
             if (ev.ch == '1' || ev.ch == 's' || ev.ch == 'S') {
-                return MAIN_MENU_START;
+                return MAIN_MENU_REGULAR;
+            }
+            if (ev.ch == '2') {
+                return MAIN_MENU_QUOTES;
+            }
+            if (ev.ch == '3') {
+                return MAIN_MENU_CUSTOM;
             }
             if (ev.ch == 'q' || ev.ch == 'Q') {
                 return MAIN_MENU_QUIT;
@@ -237,14 +250,18 @@ static size_t find_list_option_index(WordListKind list_kind)
     return 1;
 }
 
-static RunSetupAction wait_for_run_setup(bool use_color, RunSetup *setup)
+static RunSetupAction wait_for_run_setup(bool use_color, const char *title, RunSetup *setup)
 {
     size_t time_idx = find_time_option_index(setup->time_seconds);
     size_t list_idx = find_list_option_index(setup->list_kind);
     bool focus_time = true;
 
     while (true) {
-        terminal_render_run_setup(use_color, RUN_SETUP_TIMES[time_idx], words_list_name(RUN_SETUP_LISTS[list_idx]), focus_time);
+        terminal_render_run_setup(use_color,
+                                  title,
+                                  RUN_SETUP_TIMES[time_idx],
+                                  words_list_name(RUN_SETUP_LISTS[list_idx]),
+                                  focus_time);
         const InputEvent ev = input_read_event();
 
         if (ev.type == INPUT_CTRL_C) {
@@ -281,7 +298,43 @@ static RunSetupAction wait_for_run_setup(bool use_color, RunSetup *setup)
     }
 }
 
-static bool wait_for_main_menu_and_setup(bool use_color, RunSetup *setup)
+static RunSetupAction wait_for_custom_setup(bool use_color, const WordsDb *words_db, RunSetup *setup)
+{
+    size_t time_idx = find_time_option_index(setup->time_seconds);
+    const size_t custom_file_count = words_custom_file_count(words_db);
+
+    while (true) {
+        terminal_render_custom_setup(use_color, RUN_SETUP_TIMES[time_idx], words_db->custom_files, custom_file_count);
+        const InputEvent ev = input_read_event();
+
+        if (ev.type == INPUT_CTRL_C) {
+            return RUN_SETUP_QUIT;
+        }
+        if (ev.type == INPUT_ESCAPE) {
+            return RUN_SETUP_BACK;
+        }
+        if (ev.type == INPUT_ENTER) {
+            if (custom_file_count > 0) {
+                setup->time_seconds = RUN_SETUP_TIMES[time_idx];
+                return RUN_SETUP_START;
+            }
+        } else if (ev.type == INPUT_ARROW_UP) {
+            time_idx = (time_idx + (sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0])) - 1) %
+                       (sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0]));
+        } else if (ev.type == INPUT_ARROW_DOWN) {
+            time_idx = (time_idx + 1) % (sizeof(RUN_SETUP_TIMES) / sizeof(RUN_SETUP_TIMES[0]));
+        }
+
+        struct timespec req = { .tv_sec = 0, .tv_nsec = 10 * 1000 * 1000 };
+        nanosleep(&req, NULL);
+    }
+}
+
+static bool wait_for_main_menu_and_setup(bool use_color,
+                                         const WordsDb *words_db,
+                                         RunSetup *setup,
+                                         ContentMode *content_mode,
+                                         RunMode *run_mode)
 {
     while (true) {
         const MainMenuAction action = wait_for_main_menu_action(use_color);
@@ -289,8 +342,27 @@ static bool wait_for_main_menu_and_setup(bool use_color, RunSetup *setup)
             return false;
         }
 
-        const RunSetupAction setup_action = wait_for_run_setup(use_color, setup);
+        if (action == MAIN_MENU_QUOTES) {
+            *content_mode = CONTENT_WORDS;
+            *run_mode = RUN_MODE_QUOTE;
+            return true;
+        }
+
+        RunSetupAction setup_action = RUN_SETUP_BACK;
+        ContentMode selected_content_mode = CONTENT_WORDS;
+        RunMode selected_run_mode = RUN_MODE_TIME;
+
+        if (action == MAIN_MENU_REGULAR) {
+            setup_action = wait_for_run_setup(use_color, "Regular Run Setup", setup);
+            selected_content_mode = CONTENT_WORDS;
+        } else if (action == MAIN_MENU_CUSTOM) {
+            setup_action = wait_for_custom_setup(use_color, words_db, setup);
+            selected_content_mode = CONTENT_CUSTOM;
+        }
+
         if (setup_action == RUN_SETUP_START) {
+            *content_mode = selected_content_mode;
+            *run_mode = selected_run_mode;
             return true;
         }
         if (setup_action == RUN_SETUP_QUIT) {
@@ -303,6 +375,7 @@ static int build_target(char *target,
                         size_t target_size,
                         const WordsDb *words_db,
                         RunMode mode,
+                        ContentMode content_mode,
                         WordListKind list_kind,
                         int time_seconds,
                         int word_count)
@@ -321,6 +394,11 @@ static int build_target(char *target,
             count = 1000;
         }
     }
+
+    if (content_mode == CONTENT_CUSTOM) {
+        return words_build_custom_target(words_db, count, target, target_size);
+    }
+
     return words_build_target(words_db, list_kind, count, target, target_size);
 }
 
@@ -353,6 +431,7 @@ int main(int argc, char **argv)
     const char *list_name = opts.has_list_name ? opts.list_name : cfg.word_list;
     WordListKind current_list_kind = words_list_from_name(list_name);
     RunMode current_mode = opts.mode;
+    ContentMode current_content_mode = CONTENT_WORDS;
 
     srand((unsigned int)time(NULL));
 
@@ -380,19 +459,25 @@ int main(int argc, char **argv)
     };
 
     if (use_main_menu) {
-        if (!wait_for_main_menu_and_setup(use_color, &run_setup)) {
+        if (!wait_for_main_menu_and_setup(use_color, &words_db, &run_setup, &current_content_mode, &current_mode)) {
             terminal_restore();
             words_free(&words_db);
             return 0;
         }
         current_time_seconds = run_setup.time_seconds;
         current_list_kind = run_setup.list_kind;
-        current_mode = RUN_MODE_TIME;
     }
 
     while (running) {
         if (regenerate) {
-            if (build_target(target, sizeof(target), &words_db, current_mode, current_list_kind, current_time_seconds, word_count) != 0) {
+            if (build_target(target,
+                             sizeof(target),
+                             &words_db,
+                             current_mode,
+                             current_content_mode,
+                             current_list_kind,
+                             current_time_seconds,
+                             word_count) != 0) {
                 terminal_restore();
                 fprintf(stderr, "Failed to build target text\n");
                 words_free(&words_db);
@@ -438,7 +523,13 @@ int main(int argc, char **argv)
 
         Metrics final_metrics;
         metrics_compute(&session, &final_metrics);
-        terminal_render_results(&session, &final_metrics, words_list_name(current_list_kind), use_color);
+        const char *difficulty_name = words_list_name(current_list_kind);
+        if (current_mode == RUN_MODE_QUOTE) {
+            difficulty_name = "quote";
+        } else if (current_content_mode == CONTENT_CUSTOM) {
+            difficulty_name = "custom";
+        }
+        terminal_render_results(&session, &final_metrics, difficulty_name, use_color);
 
         const ResultAction action = wait_for_results_action();
         if (action == RESULT_QUIT) {
@@ -446,12 +537,11 @@ int main(int argc, char **argv)
         } else if (action == RESULT_MAIN_MENU) {
             run_setup.time_seconds = current_time_seconds;
             run_setup.list_kind = current_list_kind;
-            if (!wait_for_main_menu_and_setup(use_color, &run_setup)) {
+            if (!wait_for_main_menu_and_setup(use_color, &words_db, &run_setup, &current_content_mode, &current_mode)) {
                 running = false;
             } else {
                 current_time_seconds = run_setup.time_seconds;
                 current_list_kind = run_setup.list_kind;
-                current_mode = RUN_MODE_TIME;
                 regenerate = true;
             }
         } else if (action == RESULT_RETRY_NEW) {
