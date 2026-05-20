@@ -89,10 +89,26 @@ Results screen after the test:
 
 ## Installation
 
-### Pre-built binary (Linux x86-64)
+### One-command install (recommended)
 
 ```bash
-curl -Lo cmonkey https://github.com/yourname/cmonkey/releases/latest/download/cmonkey-linux-x86_64
+curl -fsSL https://raw.githubusercontent.com/Felpor-cmd/cMonkey/main/install.sh | bash
+```
+
+This downloads the latest prebuilt binary from GitHub Releases and installs it to `/usr/local/bin/cmonkey`.
+
+Release assets use this naming pattern: `cmonkey-<platform>-<arch>` (for example `cmonkey-linux-x86_64`).
+
+To install a specific tagged version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Felpor-cmd/cMonkey/main/install.sh | CMONKEY_VERSION=v0.1.0 bash
+```
+
+### Pre-built binary (manual)
+
+```bash
+curl -fLo cmonkey https://github.com/Felpor-cmd/cMonkey/releases/latest/download/cmonkey-linux-x86_64
 chmod +x cmonkey
 sudo mv cmonkey /usr/local/bin/
 ```
@@ -100,6 +116,8 @@ sudo mv cmonkey /usr/local/bin/
 ### Build from source
 
 See [Building from Source](#building-from-source) below.
+
+For maintainers, pushing a tag like `v0.1.0` triggers the release workflow that publishes prebuilt binaries.
 
 ---
 
@@ -235,7 +253,7 @@ cmonkey/
 **Requirements:** `gcc` or `clang`, `make`, a POSIX-compatible system (Linux or macOS).
 
 ```bash
-git clone https://github.com/yourname/cmonkey.git
+git clone https://github.com/Felpor-cmd/cMonkey.git
 cd cmonkey
 make
 ```

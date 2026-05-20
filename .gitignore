@@ -1,5 +1,4 @@
 .github/*
-!.github/copilot-instructions.md
 cmonkey_project_spec.docx
 .env
 cmonkey
